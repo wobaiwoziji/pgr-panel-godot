@@ -39,14 +39,62 @@ var _title_b: Label
 var _title_w := 0.0
 var _artist: Label
 var _media_clip: Control
+var grid
+var grid_clip
+var open := true
+var cfg := {}
 
 
 func _ready() -> void:
+	_load_config()
 	for b in buttons:
-		textures[b.icon] = load("res://assets/icons/%s.png" % b.icon)
+		textures[b.get("icon", "")] = load("res://assets/icons/%s.png" % b.get("icon", ""))
 	for q in quick:
 		textures[q] = load("res://assets/icons/%s.png" % q)
 	_build_text_layer()
+	_build_grid_layer()
+
+
+func _load_config() -> void:
+	var f := FileAccess.open("res://config.json", FileAccess.READ)
+	if f == null:
+		return
+	var data = JSON.parse_string(f.get_as_text())
+	if data is Dictionary:
+		cfg = data
+		var panel: Dictionary = cfg.get("panel", {})
+		if panel.has("buttons"):
+			buttons = panel["buttons"]
+		if panel.has("quick"):
+			var q: Array = []
+			for item in panel["quick"]:
+				q.append(item.get("icon", ""))
+			if q.size() > 0:
+				quick = q
+
+
+func set_open(v: bool) -> void:
+	open = v
+	if grid_clip:
+		grid_clip.visible = v
+	queue_redraw()
+
+
+func _build_grid_layer() -> void:
+	var area := Rect2(PANEL.position + Vector2(8, 196), Vector2(420, 438))
+	grid_clip = Control.new()
+	grid_clip.position = area.position
+	grid_clip.size = area.size
+	grid_clip.clip_contents = true
+	grid_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(grid_clip)
+
+	grid = Node2D.new()
+	grid.set_script(load("res://scripts/grid_view.gd"))
+	grid.font = FONT_BODY
+	grid.buttons = buttons
+	grid.textures = textures
+	grid_clip.add_child(grid)
 
 
 func set_track(t: Dictionary) -> void:
@@ -124,13 +172,57 @@ func _advance_marquee() -> void:
 	_title_b.position.x = off + span
 
 
+# ── 交互 ──
+func grid_area() -> Rect2:
+	return Rect2(PANEL.position + Vector2(8, 196), Vector2(420, 438))
+
+
+func hit(p: Vector2) -> Dictionary:
+	if p.distance_to(LENS_CENTER) < 60.0:
+		return { "type": "lens" }
+	if not open:
+		return {}
+	var area := grid_area()
+	if area.has_point(p):
+		var idx: int = grid.hit(p - area.position)
+		if idx >= 0:
+			return { "type": "cell", "index": idx }
+	var y := PANEL.end.y - 34 - 56
+	var x0 := PANEL.position.x - 38
+	var step := 456.0 / maxf(quick.size(), 1)
+	for i in quick.size():
+		if Rect2(Vector2(x0 + step * i, y - 12), Vector2(step, 80)).has_point(p):
+			return { "type": "quick", "index": i }
+	return {}
+
+
+func cursor_move(p: Vector2) -> void:
+	if grid == null:
+		return
+	var idx := -1
+	var area := grid_area()
+	if open and area.has_point(p):
+		idx = grid.hit(p - area.position)
+	if idx != grid.hover:
+		grid.hover = idx
+		grid.queue_redraw()
+
+
+func wheel(dy: float) -> void:
+	if grid == null:
+		return
+	grid.set_scroll(grid.scroll + dy)
+
+
 
 func _draw() -> void:
+	if not open:
+		_draw_lens()
+		return
 	_draw_beams()
 	_draw_plane()
 	_draw_header()
 	_draw_media()
-	_draw_grid()
 	_draw_quick()
 	_draw_lens()
 
@@ -224,49 +316,6 @@ func _placeholder_disc(c: Vector2, radius: float) -> void:
 		var col := Color(0.42, 0.22, 0.35).lerp(Color(0.16, 0.16, 0.22), (i % 5) / 4.0)
 		var pts := PackedVector2Array([c, c + Vector2(cos(a0), sin(a0)) * radius, c + Vector2(cos(a1), sin(a1)) * radius])
 		draw_polygon(pts, PackedColorArray([col, col, col]))
-
-
-func _draw_grid() -> void:
-	var area := Rect2(PANEL.position + Vector2(8, 196), Vector2(420, 438))
-	var cols := 3
-	var gap_x := 26.0
-	var gap_y := 18.0
-	var cell_w := (area.size.x - gap_x * 2) / 3.0
-	var box_h := 102.0
-	var label_h := 32.0
-
-	for i in buttons.size():
-		var row := i / cols
-		var col := i % cols
-		var p := area.position + Vector2(col * (cell_w + gap_x), row * (box_h + label_h + gap_y))
-		if p.y + box_h > area.end.y + 40:
-			continue
-		var box := Rect2(p, Vector2(cell_w, box_h))
-		draw_rect(box, COL_CELL)
-
-		var tex: Texture2D = textures.get(buttons[i].icon)
-		if tex:
-			var s: float = min(box.size.x, box.size.y) * 0.56
-			var dst := Rect2(box.get_center() - Vector2(s, s) * 0.5, Vector2(s, s))
-			draw_texture_rect(tex, dst, false, Color(0.92, 0.95, 1.0))
-
-		var lr := Rect2(p + Vector2(cell_w * 0.04, box_h), Vector2(cell_w * 0.92, label_h))
-		draw_rect(lr, COL_LABEL)
-		var text: String = buttons[i].label
-		var fs := 17
-		var tw := FONT_BODY.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		if tw > lr.size.x - 6:
-			fs = int(fs * (lr.size.x - 6) / tw)
-			tw = FONT_BODY.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		draw_string(
-			FONT_BODY,
-			Vector2(lr.get_center().x - tw * 0.5, lr.position.y + lr.size.y * 0.5 + fs * 0.36),
-			text,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1,
-			fs,
-			COL_LABEL_FG
-		)
 
 
 func _draw_quick() -> void:

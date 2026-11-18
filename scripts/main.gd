@@ -15,11 +15,18 @@ const PERSPECTIVE := 850.0
 
 var shot_path := ""
 var ui: Node2D
+var _inv_h: Array = []
+var _cfg := {}
+var _dragging := false
+var _mouse0 := Vector2i.ZERO
+var _win0 := Vector2i.ZERO
 
 
 func _ready() -> void:
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true)
 	get_viewport().transparent_bg = true
+	_load_cfg()
+	_restore_pos()
 
 	var sub := SubViewport.new()
 	sub.size = Vector2i(CANVAS)
@@ -54,6 +61,9 @@ func _ready() -> void:
 			"playing": true,
 		})
 
+	if "--probe" in OS.get_cmdline_user_args():
+		_probe()
+
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):
 			shot_path = arg.substr(7)
@@ -63,6 +73,14 @@ func _ready() -> void:
 
 func _on_track(track: Dictionary) -> void:
 	ui.set_track(track)
+
+
+func _probe() -> void:
+	for p in [Vector2(200, 300), Vector2(784, 748), Vector2(300, 700), Vector2(120, 100)]:
+		var q := _project(p)
+		var back := screen_to_canvas(q)
+		print("probe ", p, " -> screen ", q.round(), " -> back ", back.round(), " hit ", ui.hit(back))
+	get_tree().quit()
 
 
 # ── 透视矩阵 ──────────────────────────────────────────────
@@ -109,7 +127,119 @@ func _make_tilt_material() -> ShaderMaterial:
 	mat.set_shader_parameter("h1", Vector3(inv[1], inv[4], inv[7]))
 	mat.set_shader_parameter("h2", Vector3(inv[2], inv[5], inv[8]))
 	mat.set_shader_parameter("canvas", CANVAS)
+	_inv_h = inv
 	return mat
+
+
+# ── 输入：屏幕坐标 → 画布坐标（逆单应） ──
+func screen_to_canvas(q: Vector2) -> Vector2:
+	if _inv_h.is_empty():
+		return q
+	var a: float = _inv_h[0]
+	var b: float = _inv_h[1]
+	var c: float = _inv_h[2]
+	var d: float = _inv_h[3]
+	var e: float = _inv_h[4]
+	var f: float = _inv_h[5]
+	var g: float = _inv_h[6]
+	var h: float = _inv_h[7]
+	var i: float = _inv_h[8]
+	var w := g * q.x + h * q.y + i
+	if absf(w) < 1e-6:
+		return Vector2(-9999, -9999)
+	return Vector2((a * q.x + b * q.y + c) / w, (d * q.x + e * q.y + f) / w) * CANVAS
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		ui.cursor_move(screen_to_canvas(event.position))
+		if _dragging:
+			var d := DisplayServer.mouse_get_position() - _mouse0
+			DisplayServer.window_set_position(_win0 + d)
+		return
+
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			ui.wheel(-70.0)
+			return
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+			ui.wheel(70.0)
+			return
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				_dragging = true
+				_mouse0 = DisplayServer.mouse_get_position()
+				_win0 = DisplayServer.window_get_position()
+			else:
+				_dragging = false
+			return
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_click(screen_to_canvas(event.position))
+
+
+func _click(p: Vector2) -> void:
+	var hit: Dictionary = ui.hit(p)
+	if hit.is_empty():
+		return
+	match hit.get("type", ""):
+		"lens":
+			ui.set_open(not ui.open)
+		"cell":
+			var b: Dictionary = ui.buttons[hit["index"]]
+			_launch(b.get("id", ""))
+		"quick":
+			var quick: Array = ui.cfg.get("panel", {}).get("quick", [])
+			if hit["index"] < quick.size():
+				_launch(quick[hit["index"]].get("id", ""))
+
+
+func _launch(id: String) -> void:
+	var action: Dictionary = _cfg.get("actions", {}).get(id, {})
+	var value := _expand(action.get("value", ""))
+	if value == "":
+		return
+	OS.shell_open(value)
+
+
+func _expand(text: String) -> String:
+	var re := RegEx.new()
+	re.compile("%([^%]+)%")
+	var out := text
+	for m in re.search_all(text):
+		out = out.replace(m.get_string(0), OS.get_environment(m.get_string(1)))
+	return out
+
+
+func _load_cfg() -> void:
+	var f := FileAccess.open("res://config.json", FileAccess.READ)
+	if f:
+		var data = JSON.parse_string(f.get_as_text())
+		if data is Dictionary:
+			_cfg = data
+
+
+func _restore_pos() -> void:
+	var cf := ConfigFile.new()
+	if cf.load("user://window.cfg") != OK:
+		return
+	if not cf.has_section_key("win", "x"):
+		return
+	var pos := Vector2i(int(cf.get_value("win", "x")), int(cf.get_value("win", "y")))
+	DisplayServer.window_set_position(pos)
+
+
+func _save_pos() -> void:
+	var cf := ConfigFile.new()
+	var pos := DisplayServer.window_get_position()
+	cf.set_value("win", "x", pos.x)
+	cf.set_value("win", "y", pos.y)
+	cf.save("user://window.cfg")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_save_pos()
+		get_tree().quit()
 
 
 ## 单位方形 (0,0)(1,0)(1,1)(0,1) → 四边形，返回行主序 3×3
