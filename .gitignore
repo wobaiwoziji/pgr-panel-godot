@@ -1,0 +1,7 @@
+# Godot 4 生成的缓存
+.godot/
+# 导出产物
+/export/
+build/
+# 截图
+/out/

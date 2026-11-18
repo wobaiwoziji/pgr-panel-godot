@@ -1,0 +1,66 @@
+{
+  "window": {
+    "width": 472,
+    "height": 554,
+    "margin": 24,
+    "acrylic": false,
+    "desktopOnly": true
+  },
+  "panel": {
+    "banner": "宿舍-委托系统：队伍回归(8)",
+    "media": {
+      "status": "正在播放",
+      "title": "GhostFinal歌手： Kinoko蘑菇"
+    },
+    "buttons": [
+      { "id": "website", "label": "官网主页", "icon": "icon_website" },
+      { "id": "team_recommend", "label": "编队推荐", "icon": "icon_team_recommend" },
+      { "id": "team_edit", "label": "编队调整", "icon": "icon_team_edit" },
+      { "id": "cloud_gaming", "label": "云游戏", "icon": "icon_cloud_gaming" },
+      { "id": "wallpaper", "label": "官方壁纸", "icon": "icon_wallpaper" },
+      { "id": "comic", "label": "官方漫画", "icon": "icon_comic" },
+      { "id": "download", "label": "资源下载", "icon": "icon_download" },
+      { "id": "export", "label": "编队导出", "icon": "icon_export" },
+      { "id": "strategy", "label": "作战攻略", "icon": "icon_strategy" },
+      { "id": "community", "label": "官方社区", "icon": "icon_friend" },
+      { "id": "support", "label": "客服中心", "icon": "icon_group" },
+      { "id": "codes", "label": "兑换码", "icon": "icon_export" },
+      { "id": "patch", "label": "版本前瞻", "icon": "icon_wallpaper" },
+      { "id": "shots", "label": "截图相册", "icon": "icon_camera" },
+      { "id": "settings2", "label": "面板设置", "icon": "icon_settings" },
+      { "id": "cloud2", "label": "云存档", "icon": "icon_cloud_gaming" },
+      { "id": "downloads2", "label": "下载目录", "icon": "icon_download" },
+      { "id": "about", "label": "关于", "icon": "icon_comic" }
+    ],
+    "quick": [
+      { "id": "friend", "icon": "icon_friend" },
+      { "id": "camera", "icon": "icon_camera" },
+      { "id": "group", "icon": "icon_group" },
+      { "id": "settings", "icon": "icon_settings" }
+    ]
+  },
+  "actions": {
+    "download": { "type": "path", "value": "%USERPROFILE%\\Downloads" },
+    "website": { "type": "url", "value": "https://pgr.kurogame.net" },
+    "team_recommend": { "type": "url", "value": "https://wiki.biligame.com/pgr" },
+    "team_edit": { "type": "path", "value": "D:\\Punishing Gray Raven" },
+    "cloud_gaming": { "type": "url", "value": "https://cloud.kurogame.net" },
+    "wallpaper": { "type": "path", "value": "%USERPROFILE%\\Pictures" },
+    "comic": { "type": "url", "value": "https://pgr.kurogame.net" },
+    "export": { "type": "path", "value": "%USERPROFILE%\\Documents" },
+    "strategy": { "type": "url", "value": "https://wiki.biligame.com/pgr" },
+    "community": { "type": "url", "value": "https://weibo.com/pgr" },
+    "support": { "type": "url", "value": "https://kf.kurogame.com" },
+    "codes": { "type": "url", "value": "https://pgr.kurogame.net" },
+    "patch": { "type": "url", "value": "https://pgr.kurogame.net" },
+    "shots": { "type": "path", "value": "%USERPROFILE%\\Pictures\\Screenshots" },
+    "settings2": { "type": "config", "value": "" },
+    "cloud2": { "type": "path", "value": "%USERPROFILE%\\Documents" },
+    "downloads2": { "type": "path", "value": "%USERPROFILE%\\Downloads" },
+    "about": { "type": "config", "value": "" },
+    "friend": { "type": "path", "value": "%USERPROFILE%\\Desktop" },
+    "camera": { "type": "path", "value": "%USERPROFILE%\\Pictures\\Screenshots" },
+    "group": { "type": "path", "value": "%USERPROFILE%\\Documents" },
+    "settings": { "type": "config", "value": "" }
+  }
+}
