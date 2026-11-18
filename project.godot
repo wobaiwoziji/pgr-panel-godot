@@ -1,5 +1,10 @@
-; PGR 全息桌面面板 —— Godot 4.7 版本（骨架）
-; 画布沿用 Web 版的 760×892 设计尺寸，窗口按 0.621 缩放显示
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -14,12 +19,11 @@ boot_splash/show_image=false
 
 window/size/viewport_width=760
 window/size/viewport_height=892
-window/size/window_width_override=472
-window/size/window_height_override=554
 window/size/borderless=true
 window/size/transparent=true
+window/size/window_width_override=472
+window/size/window_height_override=554
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep"
 window/per_pixel_transparency/allowed=true
 
 [rendering]
@@ -27,4 +31,3 @@ window/per_pixel_transparency/allowed=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0, 0, 0, 0)
-anti_aliasing/quality/msaa_2d=0

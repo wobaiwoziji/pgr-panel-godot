@@ -20,6 +20,8 @@ var _cfg := {}
 var _dragging := false
 var _mouse0 := Vector2i.ZERO
 var _win0 := Vector2i.ZERO
+var _overlay: CanvasLayer
+var _editor: Control
 
 
 func _ready() -> void:
@@ -64,7 +66,21 @@ func _ready() -> void:
 	if "--probe" in OS.get_cmdline_user_args():
 		_probe()
 
+	_overlay = CanvasLayer.new()
+	_overlay.layer = 10
+	add_child(_overlay)
+
 	_apply_passthrough()
+
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--edit="):
+			open_editor(int(arg.substr(7)))
+		if arg == "--savetest":
+			_save_button(0, { "label": "测试按钮", "icon": "icon_comic", "target": "https://example.com" })
+			var f := FileAccess.open("user://config.json", FileAccess.READ)
+			print("SAVETEST ", f.get_as_text().substr(0, 160))
+			print("SAVETEST label=", ui.buttons[0].get("label"), " icon=", ui.buttons[0].get("icon"))
+			get_tree().quit()
 
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):
@@ -181,6 +197,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			if event.pressed:
+				var p := screen_to_canvas(event.position)
+				var hit: Dictionary = ui.hit(p)
+				if hit.get("type", "") == "cell":
+					open_editor(hit["index"])
+					return
+				if hit.get("type", "") == "quick":
+					return
 				_dragging = true
 				_mouse0 = DisplayServer.mouse_get_position()
 				_win0 = DisplayServer.window_get_position()
@@ -224,8 +247,71 @@ func _expand(text: String) -> String:
 	return out
 
 
+# ── 按钮编辑 ──
+func open_editor(index: int) -> void:
+	if _editor != null:
+		return
+	var b: Dictionary = ui.buttons[index]
+	var id: String = b.get("id", "")
+	var act: Dictionary = _cfg.get("actions", {}).get(id, {})
+
+	_editor = Control.new()
+	_editor.set_script(load("res://scripts/editor_panel.gd"))
+	_editor.index = index
+	_editor.data = {
+		"label": b.get("label", ""),
+		"icon": b.get("icon", ""),
+		"target": act.get("value", ""),
+	}
+	_editor.closed.connect(_close_editor)
+	_editor.saved.connect(_save_button)
+	_overlay.add_child(_editor)
+
+	# 弹窗期间整窗都要能点
+	DisplayServer.window_set_mouse_passthrough(PackedVector2Array())
+
+
+func _close_editor() -> void:
+	if _editor != null:
+		_editor.queue_free()
+		_editor = null
+	_apply_passthrough()
+
+
+func _save_button(index: int, d: Dictionary) -> void:
+	if not _cfg.has("panel"):
+		return
+	var list: Array = _cfg["panel"].get("buttons", [])
+	if index < 0 or index >= list.size():
+		return
+	var b: Dictionary = list[index]
+	b["label"] = d.get("label", "")
+	b["icon"] = d.get("icon", "")
+
+	var id: String = b.get("id", "")
+	var target: String = d.get("target", "")
+	if not _cfg.has("actions"):
+		_cfg["actions"] = {}
+	if target == "":
+		_cfg["actions"].erase(id)
+	else:
+		_cfg["actions"][id] = {
+			"type": "url" if target.begins_with("http") else "path",
+			"value": target,
+		}
+
+	var f := FileAccess.open("user://config.json", FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(_cfg, "  "))
+		f.close()
+	ui.reload_config()
+	_close_editor()
+
+
 func _load_cfg() -> void:
-	var f := FileAccess.open("res://config.json", FileAccess.READ)
+	var f := FileAccess.open("user://config.json", FileAccess.READ)
+	if f == null:
+		f = FileAccess.open("res://config.json", FileAccess.READ)
 	if f:
 		var data = JSON.parse_string(f.get_as_text())
 		if data is Dictionary:

@@ -56,7 +56,9 @@ func _ready() -> void:
 
 
 func _load_config() -> void:
-	var f := FileAccess.open("res://config.json", FileAccess.READ)
+	var f := FileAccess.open("user://config.json", FileAccess.READ)
+	if f == null:
+		f = FileAccess.open("res://config.json", FileAccess.READ)
 	if f == null:
 		return
 	var data = JSON.parse_string(f.get_as_text())
@@ -71,6 +73,20 @@ func _load_config() -> void:
 				q.append(item.get("icon", ""))
 			if q.size() > 0:
 				quick = q
+
+
+## 配置被编辑保存后重新载入，重建九宫格
+func reload_config() -> void:
+	_load_config()
+	textures.clear()
+	for b in buttons:
+		textures[b.get("icon", "")] = load("res://assets/icons/%s.png" % b.get("icon", ""))
+	if grid:
+		grid.buttons = buttons
+		grid.textures = textures
+		grid.scroll = 0.0
+		grid.queue_redraw()
+	queue_redraw()
 
 
 func set_open(v: bool) -> void:
