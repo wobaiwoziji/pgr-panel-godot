@@ -147,8 +147,6 @@ func _make_tilt_material() -> ShaderMaterial:
 	# 源矩形是整块画布，先归一化成单位方形再求到目标四边形的单应矩阵
 	var h := _unit_to_quad(quad)
 	var inv := _inv3(h)
-	print("quad=", quad)
-	print("inv=", inv)
 
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/homography.gdshader")
