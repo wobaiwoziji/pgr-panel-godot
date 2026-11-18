@@ -15,6 +15,7 @@ const TEX_LENS_CORE: Texture2D = preload("res://assets/icons/lens_core.png")
 
 const PANEL := Rect2(140, 74, 480, 772)
 const LENS_CENTER := Vector2(722, 764)
+const DOCK_LENS := Vector2(726, 826)
 const LENS_R := 34.0
 
 const COL_CELL := Color8(5, 7, 12)
@@ -46,6 +47,7 @@ var lens_angle := 0.0
 var _elapsed := 0.0
 var beam_alpha := 1.0
 var particle_count := 60
+var motion := true
 var _particles: Array = []
 var _title_a: Label
 var _title_b: Label
@@ -123,6 +125,8 @@ func set_open(v: bool) -> void:
 	open = v
 	if grid_clip:
 		grid_clip.visible = v
+	if _media_clip:
+		_media_clip.visible = v
 	queue_redraw()
 
 
@@ -158,10 +162,11 @@ func set_cover(tex: Texture2D) -> void:
 
 func _process(delta: float) -> void:
 	_elapsed += delta
-	if track.cover != null:
-		cover_angle += delta * 0.85
-	lens_angle += delta * 0.12
-	_step_particles(delta)
+	if motion:
+		if track.cover != null:
+			cover_angle += delta * 0.85
+		lens_angle += delta * 0.12
+		_step_particles(delta)
 	if track.cover != null or not _particles.is_empty():
 		queue_redraw()
 	_advance_marquee()
@@ -270,7 +275,8 @@ func grid_area() -> Rect2:
 
 
 func hit(p: Vector2) -> Dictionary:
-	if p.distance_to(LENS_CENTER) < 60.0:
+	var lens_at: Vector2 = LENS_CENTER if open else DOCK_LENS
+	if p.distance_to(lens_at) < 60.0:
 		return { "type": "lens" }
 	if not open:
 		return {}
@@ -309,7 +315,8 @@ func wheel(dy: float) -> void:
 
 func _draw() -> void:
 	if not open:
-		_draw_lens()
+		_draw_dock()
+		_draw_lens(true, DOCK_LENS)
 		return
 	_draw_particles()
 	_draw_beams()
@@ -404,18 +411,42 @@ func _draw_quick() -> void:
 		draw_texture_rect(tex, dst, false, Color(0.92, 0.95, 1.0))
 
 
-func _draw_lens() -> void:
-	draw_circle(LENS_CENTER, LENS_R + 14, Color(0.31, 0.63, 1.0, 0.10))
-	draw_set_transform(LENS_CENTER, lens_angle, Vector2.ONE)
+func _draw_lens(dim := false, center := LENS_CENTER) -> void:
+	var glow := Color(0.31, 0.63, 1.0, 0.10) if not dim else Color(0.2, 0.35, 0.55, 0.10)
+	draw_circle(center, LENS_R + 14, glow)
+	draw_set_transform(center, lens_angle, Vector2.ONE)
 	var s := LENS_R * 3.0
 	var rect := Rect2(Vector2(-s * 0.5, -s * 0.5), Vector2(s, s))
-	draw_texture_rect(TEX_LENS_RING, rect, false, Color(0.5, 0.78, 1.0, 0.75))
+	var ring_col := Color(0.5, 0.78, 1.0, 0.75) if not dim else Color(0.34, 0.44, 0.56, 0.65)
+	var petal_col := Color(0.62, 0.85, 1.0, 0.5) if not dim else Color(0.3, 0.4, 0.5, 0.45)
+	var core_col := Color(0.8, 0.94, 1.0, 0.9) if not dim else Color(0.45, 0.55, 0.66, 0.8)
+	draw_texture_rect(TEX_LENS_RING, rect, false, ring_col)
 	var sp := s * 0.82
-	draw_texture_rect(TEX_LENS_PETALS, Rect2(Vector2(-sp * 0.5, -sp * 0.5), Vector2(sp, sp)), false, Color(0.62, 0.85, 1.0, 0.5))
+	draw_texture_rect(TEX_LENS_PETALS, Rect2(Vector2(-sp * 0.5, -sp * 0.5), Vector2(sp, sp)), false, petal_col)
 	var c := s * 0.3
-	draw_texture_rect(TEX_LENS_CORE, Rect2(Vector2(-c * 0.5, -c * 0.5), Vector2(c, c)), false, Color(0.8, 0.94, 1.0, 0.9))
+	draw_texture_rect(TEX_LENS_CORE, Rect2(Vector2(-c * 0.5, -c * 0.5), Vector2(c, c)), false, core_col)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
-	draw_circle(LENS_CENTER, 5.0, Color(0.8, 0.95, 1.0, 0.9))
+	draw_circle(center, 5.0, Color(0.8, 0.95, 1.0, 0.9) if not dim else Color(0.5, 0.62, 0.75, 0.8))
+
+
+## 收起状态：镜头下面一条显示时间的横条
+func _draw_dock() -> void:
+	var r := Rect2(498, 798, 200, 56)
+	draw_style_box(_box(Color(0.016, 0.039, 0.075, 0.86), 10), r)
+	draw_rect(r.grow(-1), Color(0.34, 0.44, 0.58, 0.5), false, 1.0)
+
+	var t := Time.get_time_dict_from_system()
+	var clock := "%02d:%02d" % [t.hour, t.minute]
+	var tw := FONT_BODY.get_string_size(clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x
+	draw_string(
+		FONT_BODY,
+		Vector2(r.position.x + r.size.x * 0.5 - tw * 0.5, r.position.y + r.size.y * 0.5 + 9),
+		clock,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		26,
+		Color(0.82, 0.9, 1.0, 0.92)
+	)
 
 
 func _box(color: Color, radius: int) -> StyleBoxFlat:

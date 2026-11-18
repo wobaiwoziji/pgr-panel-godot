@@ -11,6 +11,7 @@ const ICONS := [
 	"icon_friend", "icon_group", "icon_camera", "icon_settings",
 ]
 
+var px := Vector2(760, 892)
 var index := -1
 var data := { "label": "", "icon": "", "target": "" }
 var chosen_icon := ""
@@ -24,7 +25,7 @@ var _buttons := {}
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	size = px
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var dim := ColorRect.new()

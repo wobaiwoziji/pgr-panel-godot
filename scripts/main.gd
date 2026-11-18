@@ -22,6 +22,9 @@ var _mouse0 := Vector2i.ZERO
 var _win0 := Vector2i.ZERO
 var _overlay: CanvasLayer
 var _editor: Control
+var _view: TextureRect
+var _tilt_mat: ShaderMaterial
+var _flat_state := false
 var _server: TCPServer
 var _peer: StreamPeerTCP
 var _tray_pid := -1
@@ -63,8 +66,10 @@ func _ready() -> void:
 	view.size = CANVAS
 	view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	if not ("--flat" in OS.get_cmdline_user_args()):
-		view.material = _make_tilt_material()
+		_tilt_mat = _make_tilt_material()
+		view.material = _tilt_mat
 	add_child(view)
+	_view = view
 
 	if "--fake" in OS.get_cmdline_user_args():
 		ui.set_track({
@@ -80,6 +85,7 @@ func _ready() -> void:
 	_overlay = CanvasLayer.new()
 	_overlay.layer = 10
 	add_child(_overlay)
+	_sync_overlay()
 
 	_apply_passthrough()
 
@@ -91,6 +97,8 @@ func _ready() -> void:
 			open_editor(int(arg.substr(7)))
 		if arg == "--settings":
 			open_settings()
+		if arg == "--closed":
+			ui.set_open(false)
 		if arg == "--onlinetest":
 			_music.test_online("稻香", "周杰伦")
 			await get_tree().create_timer(8.0).timeout
@@ -141,6 +149,12 @@ func _start_link() -> void:
 
 
 func _process(_delta: float) -> void:
+	# 收起时取消透视：横条和球按平面摆，不会被投影推出屏幕
+	if _view != null and _tilt_mat != null:
+		var want_flat: bool = not ui.open
+		if _flat_state != want_flat:
+			_flat_state = want_flat
+			_view.material = null if want_flat else _tilt_mat
 	if _server == null:
 		return
 	while _server.is_connection_available():
@@ -204,20 +218,63 @@ func _save_settings() -> void:
 
 
 func _apply_zoom(pct: float) -> void:
-	var z: float = clampf(pct, 50.0, 150.0) / 100.0
+	_zoom_pct = clampf(pct, 50.0, 150.0)
+	# 设置/编辑弹窗开着的时候先不改窗口，关掉后统一应用
+	if _settings != null or _editor != null:
+		return
+	var z: float = _zoom_pct / 100.0
 	var target := Vector2i(round(_base_window.x * z), round(_base_window.y * z))
 	var pos := DisplayServer.window_get_position()
 	var cur := DisplayServer.window_get_size()
 	DisplayServer.window_set_size(target)
 	DisplayServer.window_set_position(pos + cur - target)
 	_apply_passthrough()
+	_sync_overlay()
+
+
+## 弹窗模式：窗口临时撑到至少 620×760，面板按固定像素显示
+func _modal_window(on: bool) -> void:
+	var target := Vector2i(
+		round(_base_window.x * _zoom_pct / 100.0),
+		round(_base_window.y * _zoom_pct / 100.0)
+	)
+	if on:
+		target = Vector2i(maxi(target.x, 620), maxi(target.y, 760))
+	var cur := DisplayServer.window_get_size()
+	if target == cur:
+		_sync_overlay()
+		return
+	var pos := DisplayServer.window_get_position()
+	DisplayServer.window_set_size(target)
+	DisplayServer.window_set_position(pos + cur - target)
+	_sync_overlay()
+
+
+func _sync_overlay() -> void:
+	if _overlay == null:
+		return
+	var win := DisplayServer.window_get_size()
+	if win.x <= 0:
+		return
+	# CanvasLayer 反向缩放，让弹窗按“屏幕像素”显示，不跟投影一起缩放
+	var k := 760.0 / float(win.x)
+	_overlay.transform = Transform2D(0.0, Vector2(k, k), 0.0, Vector2.ZERO)
+	var px := Vector2(win)
+	if _settings != null:
+		_settings.px = px
+		_settings.size = px
+	if _editor != null:
+		_editor.px = px
+		_editor.size = px
 
 
 func open_settings() -> void:
 	if _settings != null:
 		return
+	_modal_window(true)
 	_settings = Control.new()
 	_settings.set_script(load("res://scripts/settings_panel.gd"))
+	_settings.px = Vector2(DisplayServer.window_get_size())
 	_settings.zoom = _zoom_pct
 	_settings.beam = ui.beam_alpha * 100.0
 	_settings.particles = ui.particle_count
@@ -226,6 +283,7 @@ func open_settings() -> void:
 	_settings.changed.connect(_on_settings)
 	_settings.closed.connect(_close_settings)
 	_overlay.add_child(_settings)
+	_sync_overlay()
 	DisplayServer.window_set_mouse_passthrough(PackedVector2Array())
 
 
@@ -233,6 +291,7 @@ func _close_settings() -> void:
 	if _settings != null:
 		_settings.queue_free()
 		_settings = null
+	_modal_window(false)
 	_apply_passthrough()
 
 
@@ -240,6 +299,7 @@ func _on_settings(v: Dictionary) -> void:
 	_zoom_pct = float(v.get("zoom", 100.0))
 	ui.beam_alpha = clampf(float(v.get("beam", 100.0)) / 100.0, 0.0, 1.0)
 	ui.set_particle_count(int(v.get("particles", 60.0)))
+	ui.motion = bool(v.get("motion", true))
 	ui.queue_redraw()
 	_apply_zoom(_zoom_pct)
 	if v.get("rescan", false):
@@ -262,8 +322,8 @@ func _apply_passthrough() -> void:
 	var a := Vector2(96, 56)
 	var b := Vector2(864, 888)
 	if not ui.open:
-		a = Vector2(700, 690)
-		b = Vector2(900, 830)
+		a = Vector2(470, 730)
+		b = Vector2(760, 880)
 	var quad := PackedVector2Array([
 		_project(a) * scale,
 		_project(Vector2(b.x, a.y)) * scale,
@@ -422,6 +482,7 @@ func _expand(text: String) -> String:
 func open_editor(index: int) -> void:
 	if _editor != null:
 		return
+	_modal_window(true)
 	var b: Dictionary = ui.buttons[index]
 	var id: String = b.get("id", "")
 	var act: Dictionary = _cfg.get("actions", {}).get(id, {})
@@ -429,6 +490,7 @@ func open_editor(index: int) -> void:
 	_editor = Control.new()
 	_editor.set_script(load("res://scripts/editor_panel.gd"))
 	_editor.index = index
+	_editor.px = Vector2(DisplayServer.window_get_size())
 	_editor.data = {
 		"label": b.get("label", ""),
 		"icon": b.get("icon", ""),
@@ -437,6 +499,7 @@ func open_editor(index: int) -> void:
 	_editor.closed.connect(_close_editor)
 	_editor.saved.connect(_save_button)
 	_overlay.add_child(_editor)
+	_sync_overlay()
 
 	# 弹窗期间整窗都要能点
 	DisplayServer.window_set_mouse_passthrough(PackedVector2Array())
@@ -446,6 +509,7 @@ func _close_editor() -> void:
 	if _editor != null:
 		_editor.queue_free()
 		_editor = null
+	_modal_window(false)
 	_apply_passthrough()
 
 
