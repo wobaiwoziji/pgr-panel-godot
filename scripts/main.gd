@@ -22,6 +22,10 @@ var _mouse0 := Vector2i.ZERO
 var _win0 := Vector2i.ZERO
 var _overlay: CanvasLayer
 var _editor: Control
+var _server: TCPServer
+var _peer: StreamPeerTCP
+var _tray_pid := -1
+const LINK_PORT := 48765
 
 
 func _ready() -> void:
@@ -72,6 +76,8 @@ func _ready() -> void:
 
 	_apply_passthrough()
 
+	_start_link()
+
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--edit="):
 			open_editor(int(arg.substr(7)))
@@ -93,14 +99,72 @@ func _on_track(track: Dictionary) -> void:
 	ui.set_track(track)
 
 
+# ── 托盘：本地 TCP 收指令（托盘助手是 powershell 小脚本） ──
+func _start_link() -> void:
+	_server = TCPServer.new()
+	if _server.listen(LINK_PORT, "127.0.0.1") != OK:
+		print("LINK: listen failed")
+		return
+	if "--no-tray" in OS.get_cmdline_user_args():
+		return
+	var script := ProjectSettings.globalize_path("res://tray.ps1")
+	_tray_pid = OS.create_process("powershell.exe", [
+		"-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script,
+	])
+
+
+func _process(_delta: float) -> void:
+	if _server == null:
+		return
+	while _server.is_connection_available():
+		_peer = _server.take_connection()
+	if _peer == null:
+		return
+	if _peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+		_peer = null
+		return
+	var n := _peer.get_available_bytes()
+	if n <= 0:
+		return
+	var text := _peer.get_utf8_string(n)
+	for line in text.split("\n"):
+		var cmd := line.strip_edges()
+		if cmd == "":
+			continue
+		print("LINK cmd: ", cmd)
+		match cmd:
+			"toggle":
+				ui.set_open(not ui.open)
+				_apply_passthrough()
+			"quit":
+				_save_pos()
+				_kill_tray()
+				get_tree().quit()
+
+
+func _kill_tray() -> void:
+	if _tray_pid > 0:
+		OS.kill(_tray_pid)
+		_tray_pid = -1
+
+
+func _exit_tree() -> void:
+	_kill_tray()
+
+
 ## 只有面板/镜头那块接收鼠标，其余透明区域点穿到桌面
 func _apply_passthrough() -> void:
 	var scale := Vector2(get_window().size) / CANVAS
+	var a := Vector2(96, 56)
+	var b := Vector2(864, 888)
+	if not ui.open:
+		a = Vector2(700, 690)
+		b = Vector2(900, 830)
 	var quad := PackedVector2Array([
-		_project(Vector2(96, 56)) * scale,
-		_project(Vector2(864, 56)) * scale,
-		_project(Vector2(864, 888)) * scale,
-		_project(Vector2(96, 888)) * scale,
+		_project(a) * scale,
+		_project(Vector2(b.x, a.y)) * scale,
+		_project(b) * scale,
+		_project(Vector2(a.x, b.y)) * scale,
 	])
 	DisplayServer.window_set_mouse_passthrough(quad)
 
@@ -219,6 +283,7 @@ func _click(p: Vector2) -> void:
 	match hit.get("type", ""):
 		"lens":
 			ui.set_open(not ui.open)
+			_apply_passthrough()
 		"cell":
 			var b: Dictionary = ui.buttons[hit["index"]]
 			_launch(b.get("id", ""))
