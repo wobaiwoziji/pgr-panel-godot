@@ -14,6 +14,7 @@ const TILT_MOVE := Vector2(-140, -6)
 const PERSPECTIVE := 850.0
 
 var shot_path := ""
+var ui: Node2D
 
 
 func _ready() -> void:
@@ -27,9 +28,14 @@ func _ready() -> void:
 	sub.disable_3d = true
 	add_child(sub)
 
-	var ui := Node2D.new()
+	ui = Node2D.new()
 	ui.set_script(load("res://scripts/ui_view.gd"))
 	sub.add_child(ui)
+
+	var music := Node.new()
+	music.set_script(load("res://scripts/music.gd"))
+	add_child(music)
+	music.changed.connect(_on_track)
 
 	var view := TextureRect.new()
 	view.texture = sub.get_texture()
@@ -40,11 +46,23 @@ func _ready() -> void:
 		view.material = _make_tilt_material()
 	add_child(view)
 
+	if "--fake" in OS.get_cmdline_user_args():
+		ui.set_track({
+			"title": "GhostFinal 歌手：Kinoko蘑菇 · 归去来兮 很长很长的歌名测试",
+			"artist": "Kinoko 蘑菇",
+			"cover": load("res://assets/icons/icon_website.png"),
+			"playing": true,
+		})
+
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):
 			shot_path = arg.substr(7)
 	if shot_path != "":
 		_take_shot()
+
+
+func _on_track(track: Dictionary) -> void:
+	ui.set_track(track)
 
 
 # ── 透视矩阵 ──────────────────────────────────────────────

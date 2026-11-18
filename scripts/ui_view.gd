@@ -30,12 +30,99 @@ var buttons := [
 var quick := ["icon_friend", "icon_camera", "icon_group", "icon_settings"]
 var textures := {}
 
+# 当前曲目（由 main.gd 通过 set_track 喂进来）
+var track := { "title": "", "artist": "", "cover": null, "playing": false }
+var cover_angle := 0.0
+var _elapsed := 0.0
+var _title_a: Label
+var _title_b: Label
+var _title_w := 0.0
+var _artist: Label
+var _media_clip: Control
+
 
 func _ready() -> void:
 	for b in buttons:
 		textures[b.icon] = load("res://assets/icons/%s.png" % b.icon)
 	for q in quick:
 		textures[q] = load("res://assets/icons/%s.png" % q)
+	_build_text_layer()
+
+
+func set_track(t: Dictionary) -> void:
+	track = t
+	_elapsed = 0.0
+	_update_text()
+
+
+func _process(delta: float) -> void:
+	_elapsed += delta
+	if track.cover != null:
+		cover_angle += delta * 0.85
+		queue_redraw()
+	_advance_marquee()
+
+
+# ── 音乐卡文字：用 Control 裁剪，歌名放不下就右→左滚 ──
+func _build_text_layer() -> void:
+	var card := Rect2(PANEL.position + Vector2(-8, 68), Vector2(428, 116))
+	_media_clip = Control.new()
+	_media_clip.position = card.position + Vector2(137, 18)
+	_media_clip.size = Vector2(card.size.x - 137 - 16, 76)
+	_media_clip.clip_contents = true
+	_media_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_media_clip)
+
+	_title_a = _make_label(Vector2(0, 16), 20, Color(0.94, 0.97, 1.0))
+	_title_b = _make_label(Vector2(0, 16), 20, Color(0.94, 0.97, 1.0))
+	_artist = _make_label(Vector2(0, 48), 14, Color(0.78, 0.86, 0.96, 0.72))
+	_update_text()
+
+
+func _make_label(pos: Vector2, size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.position = pos
+	l.add_theme_font_override("font", FONT_BODY)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_media_clip.add_child(l)
+	return l
+
+
+func _update_text() -> void:
+	if _title_a == null:
+		return
+	var title: String = track.get("title", "")
+	var artist: String = track.get("artist", "")
+	if title == "":
+		_title_a.text = "未在播放"
+		_title_b.text = ""
+		_title_a.modulate = Color(1, 1, 1, 0.45)
+		_title_w = 0.0
+	else:
+		_title_a.text = title
+		_title_b.text = title
+		_title_a.modulate = Color(1, 1, 1, 1)
+		_title_w = FONT_BODY.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+	_artist.text = artist
+	_artist.visible = artist != ""
+	_title_a.position.x = 0
+	_title_b.position.x = _title_w + 60
+
+
+func _advance_marquee() -> void:
+	if _title_a == null or _title_w <= _media_clip.size.x:
+		if _title_a:
+			_title_a.position.x = 0
+			_title_b.visible = false
+		return
+	_title_b.visible = true
+	var span := _title_w + 60.0
+	var off := -fmod(_elapsed * 55.0, span)
+	_title_a.position.x = off
+	_title_b.position.x = off + span
+
 
 
 func _draw() -> void:
@@ -118,16 +205,25 @@ func _draw_media() -> void:
 	draw_rect(r, Color(0.133, 0.125, 0.157, 0.88))
 
 	var c := r.position + Vector2(22 + 41, 58)
-	draw_circle(c, 41, Color(0.11, 0.12, 0.16))
+	if track.get("cover", null) != null:
+		draw_set_transform(c, cover_angle)
+		draw_texture_rect(track.cover, Rect2(-41, -41, 82, 82), false)
+		draw_set_transform_matrix(Transform2D.IDENTITY)
+	else:
+		_placeholder_disc(c, 41)
+
+	var cap: String = "正在播放" if track.get("title", "") != "" else "音乐"
+	draw_string(FONT_BODY, r.position + Vector2(137, 32), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.86, 0.9, 0.95, 0.8))
+
+
+func _placeholder_disc(c: Vector2, radius: float) -> void:
+	draw_circle(c, radius, Color(0.11, 0.12, 0.16))
 	for i in 32:
 		var a0 := TAU * i / 32.0
 		var a1 := TAU * (i + 1) / 32.0
 		var col := Color(0.42, 0.22, 0.35).lerp(Color(0.16, 0.16, 0.22), (i % 5) / 4.0)
-		var pts := PackedVector2Array([c, c + Vector2(cos(a0), sin(a0)) * 41, c + Vector2(cos(a1), sin(a1)) * 41])
+		var pts := PackedVector2Array([c, c + Vector2(cos(a0), sin(a0)) * radius, c + Vector2(cos(a1), sin(a1)) * radius])
 		draw_polygon(pts, PackedColorArray([col, col, col]))
-
-	draw_string(FONT_BODY, r.position + Vector2(137, 38), "音乐", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.86, 0.9, 0.95, 0.8))
-	draw_string(FONT_BODY, r.position + Vector2(137, 72), "未在播放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.75, 0.84, 0.94, 0.45))
 
 
 func _draw_grid() -> void:
