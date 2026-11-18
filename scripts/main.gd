@@ -183,8 +183,10 @@ func _load_settings() -> void:
 		return
 	_zoom_pct = float(cf.get_value("ui", "zoom", 100.0))
 	var beam := float(cf.get_value("ui", "beam", 100.0))
+	var parts := float(cf.get_value("ui", "particles", 60.0))
 	_folder = String(cf.get_value("music", "folder", ""))
 	ui.beam_alpha = clampf(beam / 100.0, 0.0, 1.0)
+	ui.set_particle_count(int(parts))
 	ui.queue_redraw()
 	if _folder != "":
 		_music.set_local_folder(_folder)
@@ -196,6 +198,7 @@ func _save_settings() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("ui", "zoom", _zoom_pct)
 	cf.set_value("ui", "beam", ui.beam_alpha * 100.0)
+	cf.set_value("ui", "particles", ui.particle_count)
 	cf.set_value("music", "folder", _folder)
 	cf.save("user://settings.cfg")
 
@@ -217,6 +220,7 @@ func open_settings() -> void:
 	_settings.set_script(load("res://scripts/settings_panel.gd"))
 	_settings.zoom = _zoom_pct
 	_settings.beam = ui.beam_alpha * 100.0
+	_settings.particles = ui.particle_count
 	_settings.folder = _folder
 	_settings.count = _music.local_files.size()
 	_settings.changed.connect(_on_settings)
@@ -235,6 +239,7 @@ func _close_settings() -> void:
 func _on_settings(v: Dictionary) -> void:
 	_zoom_pct = float(v.get("zoom", 100.0))
 	ui.beam_alpha = clampf(float(v.get("beam", 100.0)) / 100.0, 0.0, 1.0)
+	ui.set_particle_count(int(v.get("particles", 60.0)))
 	ui.queue_redraw()
 	_apply_zoom(_zoom_pct)
 	if v.get("rescan", false):

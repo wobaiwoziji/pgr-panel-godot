@@ -8,12 +8,14 @@ const FONT: FontFile = preload("res://assets/fonts/font_zh.ttf")
 
 var zoom := 100.0
 var beam := 100.0
+var particles := 60.0
 var folder := ""
 var count := 0
 
 var _folder_label: Label
 var _zoom_value: Label
 var _beam_value: Label
+var _particle_value: Label
 var _dialog: FileDialog
 
 
@@ -75,6 +77,37 @@ func _ready() -> void:
 		beam = v
 		_emit()))
 
+	# 粒子
+	box.add_child(_slider_row("投影粒子", 0, 140, particles, func(v):
+		particles = v
+		_emit()))
+
+	# 交流群
+	box.add_child(HSeparator.new())
+	var group := HBoxContainer.new()
+	group.add_theme_constant_override("separation", 12)
+	box.add_child(group)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 4)
+	group.add_child(info)
+	info.add_child(_label("升格网络开发交流群", 13))
+	var num := _label("群号 1091767355", 12)
+	num.modulate = Color(1, 1, 1, 0.75)
+	info.add_child(num)
+	var copy := Button.new()
+	copy.text = "复制群号"
+	copy.add_theme_font_override("font", FONT)
+	copy.add_theme_font_size_override("font_size", 12)
+	copy.pressed.connect(func(): DisplayServer.clipboard_set("1091767355"))
+	info.add_child(copy)
+	var qr := TextureRect.new()
+	qr.texture = load("res://assets/qq-group.png")
+	qr.custom_minimum_size = Vector2(112, 112)
+	qr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	qr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	group.add_child(qr)
+
 	var btns := HBoxContainer.new()
 	btns.alignment = BoxContainer.ALIGNMENT_END
 	box.add_child(btns)
@@ -120,10 +153,12 @@ func _slider_row(caption: String, lo: float, hi: float, value: float, cb: Callab
 	val.custom_minimum_size = Vector2(44, 0)
 	row.add_child(val)
 	s.value_changed.connect(func(v):
-		val.text = "%d%%" % int(v)
+		val.text = ("%d" if caption == "投影粒子" else "%d%%") % int(v)
 		cb.call(v))
 	if caption == "投影缩放":
 		_zoom_value = val
+	elif caption == "投影粒子":
+		_particle_value = val
 	else:
 		_beam_value = val
 	return row
@@ -136,12 +171,14 @@ func _refresh() -> void:
 	_folder_label.text = name
 	_zoom_value.text = "%d%%" % int(zoom)
 	_beam_value.text = "%d%%" % int(beam)
+	if _particle_value:
+		_particle_value.text = "%d" % int(particles)
 
 
 func _emit() -> void:
-	changed.emit({ "zoom": zoom, "beam": beam, "folder": folder })
+	changed.emit({ "zoom": zoom, "beam": beam, "particles": particles, "folder": folder })
 
 
 func _on_folder(dir: String) -> void:
 	folder = dir
-	changed.emit({ "zoom": zoom, "beam": beam, "folder": folder, "rescan": true })
+	changed.emit({ "zoom": zoom, "beam": beam, "particles": particles, "folder": folder, "rescan": true })

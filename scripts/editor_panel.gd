@@ -19,6 +19,7 @@ var _name: LineEdit
 var _target: LineEdit
 var _grid: GridContainer
 var _file: FileDialog
+var _img_dialog: FileDialog
 var _buttons := {}
 
 
@@ -85,6 +86,11 @@ func _ready() -> void:
 		_buttons[name] = b
 
 	_target = _row_line(box, "打开", data.get("target", ""))
+	var pick_img := Button.new()
+	pick_img.text = "选择图片当图标…"
+	pick_img.add_theme_font_override("font", FONT)
+	pick_img.pressed.connect(func(): _img_dialog.popup_centered_ratio(0.6))
+	box.add_child(pick_img)
 	var pick := Button.new()
 	pick.text = "浏览…"
 	pick.add_theme_font_override("font", FONT)
@@ -115,6 +121,14 @@ func _ready() -> void:
 	_file.file_selected.connect(func(p): _target.text = p)
 	add_child(_file)
 
+	_img_dialog = FileDialog.new()
+	_img_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_img_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_img_dialog.use_native_dialog = true
+	_img_dialog.filters = PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp, *.bmp ; 图片"])
+	_img_dialog.file_selected.connect(_on_custom_icon)
+	add_child(_img_dialog)
+
 
 func _row_line(parent: Node, caption: String, value: String) -> LineEdit:
 	var row := HBoxContainer.new()
@@ -143,6 +157,12 @@ func _pick_icon(name: String) -> void:
 
 func _pick_file() -> void:
 	_file.popup_centered_ratio(0.6)
+
+
+func _on_custom_icon(path: String) -> void:
+	chosen_icon = "file://" + path
+	for k in _buttons:
+		_buttons[k].modulate = Color(0.55, 0.55, 0.55)
 
 
 func _save() -> void:

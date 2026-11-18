@@ -9,8 +9,8 @@ const GAP_X := 26.0
 const GAP_Y := 18.0
 const VIEW_H := 438.0
 
-const COL_CELL := Color(5, 7, 12, 1)
-const COL_CELL_HOVER := Color(10, 18, 30, 1)
+const COL_CELL := Color8(5, 7, 12)
+const COL_CELL_HOVER := Color8(10, 18, 30)
 const COL_LABEL := Color(0.957, 0.957, 0.957, 1)
 const COL_LABEL_FG := Color(0.031, 0.035, 0.051, 1)
 
