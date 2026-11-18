@@ -64,6 +64,8 @@ func _ready() -> void:
 	if "--probe" in OS.get_cmdline_user_args():
 		_probe()
 
+	_apply_passthrough()
+
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):
 			shot_path = arg.substr(7)
@@ -73,6 +75,18 @@ func _ready() -> void:
 
 func _on_track(track: Dictionary) -> void:
 	ui.set_track(track)
+
+
+## 只有面板/镜头那块接收鼠标，其余透明区域点穿到桌面
+func _apply_passthrough() -> void:
+	var scale := Vector2(get_window().size) / CANVAS
+	var quad := PackedVector2Array([
+		_project(Vector2(96, 56)) * scale,
+		_project(Vector2(864, 56)) * scale,
+		_project(Vector2(864, 888)) * scale,
+		_project(Vector2(96, 888)) * scale,
+	])
+	DisplayServer.window_set_mouse_passthrough(quad)
 
 
 func _probe() -> void:
