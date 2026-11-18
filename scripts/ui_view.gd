@@ -331,21 +331,28 @@ func _draw() -> void:
 
 # ── 投影三角：底边贴面板上下沿，顶点指向镜头 ──
 func _draw_beams() -> void:
-	var top := PackedVector2Array([
-		Vector2(172, 108), Vector2(628, 108), LENS_CENTER,
-	])
-	var top_cols := PackedColorArray([
-		Color(0.588, 0.804, 1.0, 0.34 * beam_alpha), Color(0.588, 0.804, 1.0, 0.34 * beam_alpha), Color(0.353, 0.627, 0.882, 0.0),
-	])
-	draw_polygon(top, top_cols)
+	# 底边透明 → 中间最亮 → 顶点透明，避免出现一条硬边
+	_beam(Vector2(172, 108), Vector2(628, 108), Color(0.588, 0.804, 1.0), 0.34 * beam_alpha)
+	_beam(Vector2(172, 841), Vector2(628, 841), Color(0.11, 0.306, 0.541), 0.5 * beam_alpha)
 
-	var bottom := PackedVector2Array([
-		Vector2(172, 841), Vector2(628, 841), LENS_CENTER,
-	])
-	var bottom_cols := PackedColorArray([
-		Color(0.071, 0.22, 0.408, 0.55), Color(0.11, 0.306, 0.541, 0.55), Color(0.11, 0.306, 0.541, 0.0),
-	])
-	draw_polygon(bottom, bottom_cols)
+
+func _beam(a: Vector2, b: Vector2, col: Color, alpha: float) -> void:
+	var apex := LENS_CENTER
+	var t := 0.18
+	var m0 := a.lerp(apex, t)
+	var m1 := b.lerp(apex, t)
+	var c0 := Color(col.r, col.g, col.b, 0.0)
+	var c1 := Color(col.r, col.g, col.b, alpha)
+	# 底边那一段：从全透明渐变到最亮
+	draw_polygon(
+		PackedVector2Array([a, b, m1, m0]),
+		PackedColorArray([c0, c0, c1, c1])
+	)
+	# 指向镜头那一段：再渐隐
+	draw_polygon(
+		PackedVector2Array([m0, m1, apex]),
+		PackedColorArray([c1, c1, c0])
+	)
 
 
 # ── 蓝色面板：底板 + 纵向渐变 + 网格 ──
