@@ -13,6 +13,8 @@ const ICONS := [
 
 var px := Vector2(760, 892)
 var index := -1
+var kind := "cell"
+var quick_mode := false
 var data := { "label": "", "icon": "", "target": "" }
 var chosen_icon := ""
 
@@ -34,13 +36,14 @@ func _ready() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(420, 0)
-	center.add_child(panel)
+	var w := 420.0
+	var h := minf(px.y - 96.0, 430.0)
+	panel.custom_minimum_size = Vector2(w, h)
+	panel.size = Vector2(w, h)
+	panel.position = Vector2((px.x - w) * 0.5, 48)
+	panel.clip_contents = true
+	add_child(panel)
 
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.078, 0.204, 0.376, 0.98)
@@ -50,17 +53,24 @@ func _ready() -> void:
 	sb.set_content_margin_all(16)
 	panel.add_theme_stylebox_override("panel", sb)
 
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	panel.add_child(scroll)
+
 	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 10)
-	panel.add_child(box)
+	scroll.add_child(box)
 
 	var title := Label.new()
-	title.text = "按钮设置"
+	title.text = "快捷按钮" if quick_mode else "按钮设置"
 	title.add_theme_font_override("font", FONT)
 	title.add_theme_font_size_override("font_size", 16)
 	box.add_child(title)
 
-	_name = _row_line(box, "文字", data.get("label", ""))
+	if not quick_mode:
+		_name = _row_line(box, "文字", data.get("label", ""))
 
 	var label := Label.new()
 	label.text = "图标"
@@ -79,7 +89,8 @@ func _ready() -> void:
 	for name in ICONS:
 		var b := TextureButton.new()
 		b.texture_normal = load("res://assets/icons/%s.png" % name)
-		b.custom_minimum_size = Vector2(42, 42)
+		b.custom_minimum_size = Vector2(46, 46)
+		b.ignore_texture_size = true
 		b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 		b.modulate = Color(0.55, 0.55, 0.55) if name != chosen_icon else Color(1, 1, 1)
 		b.pressed.connect(func(): _pick_icon(name))

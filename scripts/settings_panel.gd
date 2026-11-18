@@ -35,12 +35,11 @@ func _ready() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(minf(470.0, px.x - 24.0), 0)
+	var w := minf(470.0, px.x - 24.0)
+	panel.custom_minimum_size = Vector2(w, 0)
+	panel.size = Vector2(w, 0)
+	panel.position = Vector2((px.x - w) * 0.5, 40)
 	panel.clip_contents = true
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.078, 0.204, 0.376, 0.97)
@@ -50,8 +49,7 @@ func _ready() -> void:
 	sb.set_corner_radius_all(6)
 	sb.set_content_margin_all(18)
 	panel.add_theme_stylebox_override("panel", sb)
-	center.add_child(panel)
-
+	add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
 	panel.add_child(box)

@@ -134,6 +134,17 @@ func _on_cover(tex: Texture2D) -> void:
 	ui.set_cover(tex)
 
 
+## 收起时取消透视：横条和球按平面摆，不会被投影推出屏幕
+func _sync_flat() -> void:
+	if _view == null or _tilt_mat == null:
+		return
+	var want_flat: bool = not ui.open
+	if _flat_state == want_flat:
+		return
+	_flat_state = want_flat
+	_view.material = null if want_flat else _tilt_mat
+
+
 # ── 托盘：本地 TCP 收指令（托盘助手是 powershell 小脚本） ──
 func _start_link() -> void:
 	_server = TCPServer.new()
@@ -149,12 +160,7 @@ func _start_link() -> void:
 
 
 func _process(_delta: float) -> void:
-	# 收起时取消透视：横条和球按平面摆，不会被投影推出屏幕
-	if _view != null and _tilt_mat != null:
-		var want_flat: bool = not ui.open
-		if _flat_state != want_flat:
-			_flat_state = want_flat
-			_view.material = null if want_flat else _tilt_mat
+	_sync_flat()
 	if _server == null:
 		return
 	while _server.is_connection_available():
@@ -176,6 +182,7 @@ func _process(_delta: float) -> void:
 		match cmd:
 			"toggle":
 				ui.set_open(not ui.open)
+				_sync_flat()
 				_apply_passthrough()
 			"quit":
 				_save_pos()
@@ -272,6 +279,7 @@ func open_settings() -> void:
 	if _settings != null:
 		return
 	_modal_window(true)
+	await get_tree().process_frame
 	_settings = Control.new()
 	_settings.set_script(load("res://scripts/settings_panel.gd"))
 	_settings.px = Vector2(DisplayServer.window_get_size())
@@ -429,6 +437,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					open_editor(hit["index"])
 					return
 				if hit.get("type", "") == "quick":
+					open_editor(hit["index"], "quick")
 					return
 				_dragging = true
 				_mouse0 = DisplayServer.mouse_get_position()
@@ -447,6 +456,7 @@ func _click(p: Vector2) -> void:
 	match hit.get("type", ""):
 		"lens":
 			ui.set_open(not ui.open)
+			_sync_flat()
 			_apply_passthrough()
 		"cell":
 			var b: Dictionary = ui.buttons[hit["index"]]
@@ -479,17 +489,20 @@ func _expand(text: String) -> String:
 
 
 # ── 按钮编辑 ──
-func open_editor(index: int) -> void:
+func open_editor(index: int, kind := "cell") -> void:
 	if _editor != null:
 		return
 	_modal_window(true)
-	var b: Dictionary = ui.buttons[index]
+	await get_tree().process_frame
+	var b: Dictionary = ui.buttons[index] if kind == "cell" else ui.quick_items[index]
 	var id: String = b.get("id", "")
 	var act: Dictionary = _cfg.get("actions", {}).get(id, {})
 
 	_editor = Control.new()
 	_editor.set_script(load("res://scripts/editor_panel.gd"))
 	_editor.index = index
+	_editor.kind = kind
+	_editor.quick_mode = kind == "quick"
 	_editor.px = Vector2(DisplayServer.window_get_size())
 	_editor.data = {
 		"label": b.get("label", ""),
@@ -516,11 +529,13 @@ func _close_editor() -> void:
 func _save_button(index: int, d: Dictionary) -> void:
 	if not _cfg.has("panel"):
 		return
-	var list: Array = _cfg["panel"].get("buttons", [])
+	var kind: String = _editor.kind if _editor != null else "cell"
+	var list: Array = _cfg["panel"].get("quick" if kind == "quick" else "buttons", [])
 	if index < 0 or index >= list.size():
 		return
 	var b: Dictionary = list[index]
-	b["label"] = d.get("label", "")
+	if kind != "quick":
+		b["label"] = d.get("label", "")
 	b["icon"] = d.get("icon", "")
 
 	var id: String = b.get("id", "")

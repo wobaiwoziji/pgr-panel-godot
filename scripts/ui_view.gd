@@ -15,7 +15,7 @@ const TEX_LENS_CORE: Texture2D = preload("res://assets/icons/lens_core.png")
 
 const PANEL := Rect2(140, 74, 480, 772)
 const LENS_CENTER := Vector2(722, 764)
-const DOCK_LENS := Vector2(726, 826)
+const DOCK_LENS := Vector2(658, 820)
 const LENS_R := 34.0
 
 const COL_CELL := Color8(5, 7, 12)
@@ -38,6 +38,7 @@ var buttons := [
 ]
 
 var quick := ["icon_friend", "icon_camera", "icon_group", "icon_settings"]
+var quick_items: Array = []
 var textures := {}
 
 # 当前曲目（由 main.gd 通过 set_track 喂进来）
@@ -99,7 +100,8 @@ func _load_config() -> void:
 			buttons = panel["buttons"]
 		if panel.has("quick"):
 			var q: Array = []
-			for item in panel["quick"]:
+			quick_items = panel["quick"]
+			for item in quick_items:
 				q.append(item.get("icon", ""))
 			if q.size() > 0:
 				quick = q
@@ -431,7 +433,7 @@ func _draw_lens(dim := false, center := LENS_CENTER) -> void:
 
 ## 收起状态：镜头下面一条显示时间的横条
 func _draw_dock() -> void:
-	var r := Rect2(498, 798, 200, 56)
+	var r := Rect2(430, 792, 200, 56)
 	draw_style_box(_box(Color(0.016, 0.039, 0.075, 0.86), 10), r)
 	draw_rect(r.grow(-1), Color(0.34, 0.44, 0.58, 0.5), false, 1.0)
 
