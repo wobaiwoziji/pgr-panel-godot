@@ -34,6 +34,7 @@ var textures := {}
 var track := { "title": "", "artist": "", "cover": null, "playing": false }
 var cover_angle := 0.0
 var _elapsed := 0.0
+var beam_alpha := 1.0
 var _title_a: Label
 var _title_b: Label
 var _title_w := 0.0
@@ -249,7 +250,7 @@ func _draw_beams() -> void:
 		Vector2(172, 108), Vector2(628, 108), LENS_CENTER,
 	])
 	var top_cols := PackedColorArray([
-		Color(0.588, 0.804, 1.0, 0.34), Color(0.588, 0.804, 1.0, 0.34), Color(0.353, 0.627, 0.882, 0.0),
+		Color(0.588, 0.804, 1.0, 0.34 * beam_alpha), Color(0.588, 0.804, 1.0, 0.34 * beam_alpha), Color(0.353, 0.627, 0.882, 0.0),
 	])
 	draw_polygon(top, top_cols)
 

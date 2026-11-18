@@ -26,6 +26,11 @@ var _server: TCPServer
 var _peer: StreamPeerTCP
 var _tray_pid := -1
 const LINK_PORT := 48765
+var _settings: Control
+var _music: Node
+var _folder := ""
+var _zoom_pct := 100.0
+var _base_window := Vector2i(472, 554)
 
 
 func _ready() -> void:
@@ -49,6 +54,7 @@ func _ready() -> void:
 	music.set_script(load("res://scripts/music.gd"))
 	add_child(music)
 	music.changed.connect(_on_track)
+	_music = music
 
 	var view := TextureRect.new()
 	view.texture = sub.get_texture()
@@ -77,10 +83,22 @@ func _ready() -> void:
 	_apply_passthrough()
 
 	_start_link()
+	_load_settings()
 
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--edit="):
 			open_editor(int(arg.substr(7)))
+		if arg == "--settings":
+			open_settings()
+		if arg.begins_with("--foldertest="):
+			var dir := arg.substr(13)
+			var n: int = _music.set_local_folder(dir)
+			var f: String = _music.find_local("TestSong")
+			print("FOLDERTEST count=", n, " file=", f)
+			if f != "":
+				await RenderingServer.frame_post_draw
+				print("FOLDERTEST thumb=", _music.fetch_thumb(f) != null)
+			get_tree().quit()
 		if arg == "--savetest":
 			_save_button(0, { "label": "测试按钮", "icon": "icon_comic", "target": "https://example.com" })
 			var f := FileAccess.open("user://config.json", FileAccess.READ)
@@ -146,6 +164,78 @@ func _kill_tray() -> void:
 	if _tray_pid > 0:
 		OS.kill(_tray_pid)
 		_tray_pid = -1
+
+
+# ── 设置 ──
+func _load_settings() -> void:
+	_base_window = DisplayServer.window_get_size()
+	var cf := ConfigFile.new()
+	if cf.load("user://settings.cfg") != OK:
+		return
+	_zoom_pct = float(cf.get_value("ui", "zoom", 100.0))
+	var beam := float(cf.get_value("ui", "beam", 100.0))
+	_folder = String(cf.get_value("music", "folder", ""))
+	ui.beam_alpha = clampf(beam / 100.0, 0.0, 1.0)
+	ui.queue_redraw()
+	if _folder != "":
+		_music.set_local_folder(_folder)
+	if not is_equal_approx(_zoom_pct, 100.0):
+		_apply_zoom(_zoom_pct)
+
+
+func _save_settings() -> void:
+	var cf := ConfigFile.new()
+	cf.set_value("ui", "zoom", _zoom_pct)
+	cf.set_value("ui", "beam", ui.beam_alpha * 100.0)
+	cf.set_value("music", "folder", _folder)
+	cf.save("user://settings.cfg")
+
+
+func _apply_zoom(pct: float) -> void:
+	var z: float = clampf(pct, 50.0, 150.0) / 100.0
+	var target := Vector2i(round(_base_window.x * z), round(_base_window.y * z))
+	var pos := DisplayServer.window_get_position()
+	var cur := DisplayServer.window_get_size()
+	DisplayServer.window_set_size(target)
+	DisplayServer.window_set_position(pos + cur - target)
+	_apply_passthrough()
+
+
+func open_settings() -> void:
+	if _settings != null:
+		return
+	_settings = Control.new()
+	_settings.set_script(load("res://scripts/settings_panel.gd"))
+	_settings.zoom = _zoom_pct
+	_settings.beam = ui.beam_alpha * 100.0
+	_settings.folder = _folder
+	_settings.count = _music.local_files.size()
+	_settings.changed.connect(_on_settings)
+	_settings.closed.connect(_close_settings)
+	_overlay.add_child(_settings)
+	DisplayServer.window_set_mouse_passthrough(PackedVector2Array())
+
+
+func _close_settings() -> void:
+	if _settings != null:
+		_settings.queue_free()
+		_settings = null
+	_apply_passthrough()
+
+
+func _on_settings(v: Dictionary) -> void:
+	_zoom_pct = float(v.get("zoom", 100.0))
+	ui.beam_alpha = clampf(float(v.get("beam", 100.0)) / 100.0, 0.0, 1.0)
+	ui.queue_redraw()
+	_apply_zoom(_zoom_pct)
+	if v.get("rescan", false):
+		_folder = String(v.get("folder", ""))
+		var n: int = _music.set_local_folder(_folder)
+		if _settings != null:
+			_settings.folder = _folder
+			_settings.count = n
+			_settings._refresh()
+	_save_settings()
 
 
 func _exit_tree() -> void:
@@ -290,7 +380,11 @@ func _click(p: Vector2) -> void:
 		"quick":
 			var quick: Array = ui.cfg.get("panel", {}).get("quick", [])
 			if hit["index"] < quick.size():
-				_launch(quick[hit["index"]].get("id", ""))
+				var qid: String = quick[hit["index"]].get("id", "")
+				if qid == "settings":
+					open_settings()
+				else:
+					_launch(qid)
 
 
 func _launch(id: String) -> void:

@@ -9,14 +9,84 @@ const INTERVAL_MS := 1200
 var _thread: Thread
 var _script := ""
 var _last_key := ""
+var _thumb_script := ""
+var local_root := ""
+var local_files := []
+
+const AUDIO_EXT := ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "ape"]
 
 
 func _ready() -> void:
 	_script = ProjectSettings.globalize_path("res://nowplaying.ps1")
+	_thumb_script = ProjectSettings.globalize_path("res://thumb.ps1")
 	if "--fake" in OS.get_cmdline_user_args():
 		return
 	_thread = Thread.new()
 	_thread.start(_loop)
+
+
+## 选好目录后扫一遍文件名（不读标签，很快）
+func set_local_folder(dir: String) -> int:
+	local_root = dir
+	local_files.clear()
+	if dir != "":
+		_scan(dir, 0)
+	return local_files.size()
+
+
+func _scan(dir: String, depth: int) -> void:
+	if depth > 6:
+		return
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	d.list_dir_begin()
+	var name := d.get_next()
+	while name != "":
+		if name.begins_with("."):
+			name = d.get_next()
+			continue
+		var full := dir.path_join(name)
+		if d.current_is_dir():
+			_scan(full, depth + 1)
+		else:
+			var ext := name.get_extension().to_lower()
+			if AUDIO_EXT.has(ext):
+				local_files.append(full)
+		name = d.get_next()
+	d.list_dir_end()
+
+
+func _norm(text: String) -> String:
+	var t := text.to_lower()
+	var re := RegEx.new()
+	re.compile("^\\s*\\d+[\\s._-]+")
+	t = re.sub(t, "", true)
+	t = t.replace("(", " ").replace(")", " ").replace("（", " ").replace("）", " ")
+	t = t.replace("[", " ").replace("]", " ").replace("【", " ").replace("】", " ")
+	return t.strip_edges()
+
+
+func find_local(title: String) -> String:
+	var t := _norm(title)
+	if t == "" or local_files.is_empty():
+		return ""
+	for f in local_files:
+		var base := _norm(f.get_file().get_basename())
+		if base.contains(t) or t.contains(base):
+			return f
+	return ""
+
+
+func fetch_thumb(path: String) -> Texture2D:
+	var out := []
+	var code := OS.execute("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", _thumb_script, "-Path", path], out, true)
+	if code != 0 or out.is_empty():
+		return null
+	var b64: String = String(out[0]).strip_edges()
+	if b64 == "NONE" or b64 == "":
+		return null
+	return _texture_from_data_url("data:image/jpeg;base64," + b64)
 
 
 func _exit_tree() -> void:
@@ -52,6 +122,11 @@ func _handle(data: Dictionary) -> void:
 		var url: String = data.get("cover", "")
 		if url.begins_with("data:"):
 			cover_tex = _texture_from_data_url(url)
+		else:
+			# 播放器没给封面：先找本地音乐目录里的内嵌图（秒出），没有再交给主线程上网找
+			var file := find_local(title)
+			if file != "":
+				cover_tex = fetch_thumb(file)
 
 	_emit({ "title": title, "artist": artist, "cover": cover_tex, "playing": data.get("playing", false) })
 
