@@ -120,6 +120,13 @@ func set_track(t: Dictionary) -> void:
 	_update_text()
 
 
+func set_cover(tex: Texture2D) -> void:
+	if tex == null:
+		return
+	track.cover = tex
+	queue_redraw()
+
+
 func _process(delta: float) -> void:
 	_elapsed += delta
 	if track.cover != null:

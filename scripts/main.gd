@@ -54,6 +54,7 @@ func _ready() -> void:
 	music.set_script(load("res://scripts/music.gd"))
 	add_child(music)
 	music.changed.connect(_on_track)
+	music.cover_ready.connect(_on_cover)
 	_music = music
 
 	var view := TextureRect.new()
@@ -90,6 +91,10 @@ func _ready() -> void:
 			open_editor(int(arg.substr(7)))
 		if arg == "--settings":
 			open_settings()
+		if arg == "--onlinetest":
+			_music.test_online("稻香", "周杰伦")
+			await get_tree().create_timer(8.0).timeout
+			get_tree().quit()
 		if arg.begins_with("--foldertest="):
 			var dir := arg.substr(13)
 			var n: int = _music.set_local_folder(dir)
@@ -115,6 +120,10 @@ func _ready() -> void:
 
 func _on_track(track: Dictionary) -> void:
 	ui.set_track(track)
+
+
+func _on_cover(tex: Texture2D) -> void:
+	ui.set_cover(tex)
 
 
 # ── 托盘：本地 TCP 收指令（托盘助手是 powershell 小脚本） ──

@@ -3,6 +3,7 @@ extends Node
 ## 解析封面的工作也在这里做，UI 线程只拿现成的 Texture2D
 
 signal changed(track: Dictionary)
+signal cover_ready(tex: Texture2D)
 
 const INTERVAL_MS := 1200
 
@@ -13,12 +14,22 @@ var _thumb_script := ""
 var local_root := ""
 var local_files := []
 
+var _http: HTTPRequest
+var _cover_cache := {}
+var _online_busy := false
+var _online_stage := ""
+var _online_key := ""
+
 const AUDIO_EXT := ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "ape"]
 
 
 func _ready() -> void:
 	_script = ProjectSettings.globalize_path("res://nowplaying.ps1")
 	_thumb_script = ProjectSettings.globalize_path("res://thumb.ps1")
+	_http = HTTPRequest.new()
+	_http.timeout = 8.0
+	add_child(_http)
+	_http.request_completed.connect(_on_http)
 	if "--fake" in OS.get_cmdline_user_args():
 		return
 	_thread = Thread.new()
@@ -122,17 +133,80 @@ func _handle(data: Dictionary) -> void:
 		var url: String = data.get("cover", "")
 		if url.begins_with("data:"):
 			cover_tex = _texture_from_data_url(url)
+		elif _cover_cache.has(key):
+			cover_tex = _cover_cache[key]
 		else:
-			# 播放器没给封面：先找本地音乐目录里的内嵌图（秒出），没有再交给主线程上网找
+			# 播放器没给封面：先找本地音乐目录里的内嵌图（秒出），没有再上网找
 			var file := find_local(title)
 			if file != "":
 				cover_tex = fetch_thumb(file)
+			if cover_tex == null:
+				call_deferred("_start_online", key, title, artist)
 
 	_emit({ "title": title, "artist": artist, "cover": cover_tex, "playing": data.get("playing", false) })
 
 
 func _emit(track: Dictionary) -> void:
 	call_deferred("emit_signal", "changed", track)
+
+
+# ── 在线补封面（iTunes）──
+func _start_online(key: String, title: String, artist: String) -> void:
+	if _online_busy:
+		return
+	var q := ("%s %s" % [artist, title]).strip_edges()
+	if q == "":
+		return
+	_online_busy = true
+	_online_key = key
+	_online_stage = "search"
+	var url := "https://itunes.apple.com/search?term=%s&entity=song&limit=3" % q.uri_encode()
+	_http.request(url)
+
+
+func _on_http(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if code != 200:
+		_online_reset()
+		return
+
+	if _online_stage == "search":
+		var data = JSON.parse_string(body.get_string_from_utf8())
+		if not (data is Dictionary) or not data.has("results") or data["results"].size() == 0:
+			_online_reset()
+			return
+		var art: String = str(data["results"][0].get("artworkUrl100", ""))
+		if art == "":
+			_online_reset()
+			return
+		_online_stage = "image"
+		_http.request(art.replace("100x100", "600x600"))
+		return
+
+	if _online_stage == "image":
+		var img := Image.new()
+		var err := img.load_jpg_from_buffer(body)
+		if err != OK:
+			err = img.load_png_from_buffer(body)
+		if err != OK:
+			_online_reset()
+			return
+		img.convert(Image.FORMAT_RGBA8)
+		img = _circle_mask(img)
+		var tex := ImageTexture.create_from_image(img)
+		_cover_cache[_online_key] = tex
+		print("ONLINE texture ", tex.get_size())
+		if _online_key == _last_key:
+			call_deferred("emit_signal", "cover_ready", tex)
+		_online_reset()
+
+
+func _online_reset() -> void:
+	_online_busy = false
+	_online_stage = ""
+
+
+func test_online(title: String, artist: String) -> void:
+	_start_online(title + "|" + artist, title, artist)
 
 
 func _texture_from_data_url(url: String) -> Texture2D:
